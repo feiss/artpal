@@ -1,0 +1,667 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Art Pal</title>
+    <script src="utils.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Dancing+Script:wght@700&display=swap');
+
+        * {
+            box-sizing: border-box;
+            user-select: none;
+        }
+
+        :root {
+            --menu-height: 80px;
+        }
+
+
+        body {
+            margin: 0;
+            background-color: #000;
+            width: 100vw;
+            height: 100vh;
+            font: 15px "Segoe UI", sans-serif;
+            color: #edcb7a;
+            overflow: hidden;
+        }
+
+        #area {
+            background-color: #191919;
+            width: 100%;
+            height: calc(100% - var(--menu-height));
+            background-position: 50%;
+            background-repeat: no-repeat;
+            background-size: contain;
+        }
+
+        #image {
+            position: absolute;
+            pointer-events: none;
+            user-select: none;
+            margin-top: var(--menu-height);
+            z-index: 100;
+        }
+
+        #area svg {
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 888;
+            position: relative;
+        }
+
+        #area circle {
+            pointer-events: fill;
+        }
+
+        #area circle:hover {
+            stroke: #9ef99e;
+        }
+
+        #drag_help {
+            position: absolute;
+            width: 50vw;
+            height: 50vh;
+            text-align: center;
+            left: 25vw;
+            top: 25vh;
+            border: 2px dashed #2d2c2a;
+            font-size: 25px;
+            color: #47443e;
+            line-height: 48vh;
+            background-color: #1b1b1b;
+            border-radius: 30px;
+        }
+
+        header {
+            z-index: 999;
+            padding: 20px 40px;
+            width: 100%;
+            height: var(--menu-height);
+            display: flex;
+            align-items: center;
+            gap: 2rem;
+            background-color: #131313;
+        }
+
+        h1 {
+            flex: 1 0 auto;
+            margin: 0;
+            font-family: "Dancing Script", cursive;
+            display: inline-block;
+        }
+
+        header>* {
+            flex: 0 0 auto;
+            display: inline-block;
+        }
+
+        header>span {
+            flex: 1 0 auto;
+            display: inline-block;
+        }
+
+        label {
+            cursor: pointer;
+        }
+
+        input[type="checkbox"],
+        input[type="radio"] {
+            appearance: none;
+            accent-color: #edcb7a;
+            background-color: #383838;
+            border-radius: 10px;
+            border: none;
+            cursor: pointer;
+            vertical-align: middle;
+            width: 20px;
+            height: 20px;
+            border: 5px solid #383838;
+            margin: 0;
+        }
+
+        input[type="checkbox"] {
+            border-radius: 4px;
+
+        }
+
+        input[type="checkbox"]:hover,
+        input[type="radio"]:hover {
+            border-color: #4a4a4a;
+            background-color: #4a4a4a;
+        }
+
+
+        input[type="radio"]:checked {
+            background-color: #edcb7a;
+        }
+
+        input[type="checkbox"]:checked::after {
+            content: '✔';
+            font-size: 18px;
+            position: absolute;
+            margin-top: -8px;
+            margin-left: -2px;
+        }
+
+        select,
+        button {
+            cursor: pointer;
+            appearance: none;
+            outline: none;
+            background-color: #383838;
+            border: none;
+            color: #edcb7a;
+            padding: 5px 10px;
+            border-radius: 5px;
+            font: 16px sans-serif;
+            max-width: 150px;
+        }
+
+        select:hover,
+        button:hover {
+            background-color: #4a4a4a;
+        }
+
+        button.active {
+            background-color: #edcb7a;
+            color: #2e2e2e;
+            font-weight: bold;
+        }
+
+        input[type="range"] {
+            accent-color: #edcb7a;
+            width: 70px;
+            height: 3px;
+            border: none;
+            background-color: #47443e;
+            border-radius: 3px;
+        }
+
+        ::-moz-range-thumb {
+            height: 12px;
+            width: 12px;
+            border: none;
+            background: #edcb7a;
+            box-shadow: 0px 1px 6px 0 #000;
+        }
+
+        ::-moz-range-progress {
+            background-color: #edcb7a;
+        }
+
+        ::-webkit-slider-thumb {
+            margin-top: -6px;
+        }
+
+        ::-webkit-slider-runnable-track {
+            height: 3px;
+            border-radius: 3px;
+            border: none;
+        }
+    </style>
+</head>
+
+<body>
+    <header>
+        <h1>ArtPal</h1>
+        <span></span>
+        <div>
+            Crop
+            <input type="radio" name="viewport" id="viewport" oninput="set_viewport(0)" class="active" />
+            <input type="radio" name="viewport" id="viewport" oninput="set_viewport(1)" />
+            <input type="radio" name="viewport" id="viewport" oninput="set_viewport(2)" />
+            <input type="radio" name="viewport" id="viewport" oninput="set_viewport(3)" />
+        </div>
+        <select id="mode" onchange="process_image()" autocomplete="off">
+            <option value="normal">Display mode...</option>
+            <option value="grayscale">Grayscale</option>
+            <option value="2levels">2 Tonal values</option>
+            <option value="3levels">3 Tonal values</option>
+            <option value="4levels">4 Tonal values</option>
+        </select>
+        <label> Margin <input type="range" min="0" max="300" value="100" id="margin"
+                oninput="options.margin = this.value; resize()"></label>
+        <label> Opacity <input type="range" min="50" max="100" value="97" id="marquee_opacity"
+                oninput="options.marquee_opacity = this.value; update_viewport()"></label>
+        <button>Save</button>
+        <span></span>
+    </header>
+    <div id="area">
+        <div id="drag_help">Drag&nbsp;an&nbsp;image&nbsp;to&nbsp;start</div>
+        <canvas id="image"></canvas>
+        <svg id="helpers" opacity="0">
+            <rect x="0" y="0" width="100" height="100" fill="black" opacity="0.9" id="r0" />
+            <rect x="0" y="0" width="100" height="100" fill="black" opacity="0.9" id="r1" />
+            <rect x="0" y="0" width="100" height="100" fill="black" opacity="0.9" id="r2" />
+            <rect x="0" y="0" width="100" height="100" fill="black" opacity="0.9" id="r3" />
+        </svg>
+    </div>
+    <script>
+        // all coords are relative (0-1) to #area 
+        class Viewport {
+            constructor() {
+                this.visible = false;
+                this.x = 0.1;
+                this.y = 0.1;
+                this.x2 = 0.9;
+                this.y2 = 0.9;
+            }
+        }
+
+        let viewports = [
+            new Viewport(),
+            new Viewport(),
+            new Viewport(),
+            new Viewport(),
+        ];
+
+        let viewport;
+
+        let mouse = {
+            dragging: false,
+            start: { x: 0, y: 0 },
+            end: { x: 0, y: 0 },
+            on_hotarea: None(),
+        }
+
+        let dragging = false;
+        let corner = null;
+        let image = { width: 0, height: 0, el: null, x: 0, y: 0, x2: 0, y2: 0 };
+        let canvas = {
+            el: $('#image'),
+            ctx: $('#image').getContext('2d'),
+            visible_width: 0,
+            visible_height: 0,
+        }
+        let options = {
+            margin: 100,
+            marquee_opacity: 90,
+            mode: "normal"
+        };
+
+
+        const NORTH_SIDE = 1;
+        const SOUTH_SIDE = 2;
+        const EAST_SIDE = 3;
+        const WEST_SIDE = 4;
+        const INSIDE_VIEWPORT = 5;
+
+        const BORDER_THRESHOLD = 0.02;
+        const CORNER_THRESHOLD = 0.2;
+
+        function set_image(data) {
+            if (data === null) {
+                $("#drag_help").style.display = 'block';
+                $("#image").src = '';
+                image.el = new Image();
+            } else {
+                $("#drag_help").style.display = 'none';
+                $("#image").src = data;
+                image.el = new Image();
+                image.el.src = data;
+            }
+            image.el.onload = on_image_load;
+
+        }
+
+        function on_image_load() {
+            image.width = image.el.width;
+            image.height = image.el.height;
+            viewport.visible = false;
+            canvas.el.width = image.width;
+            canvas.el.height = image.height;
+            canvas.ctx = canvas.el.getContext('2d');
+            resize();
+        }
+
+        function init() {
+            const c = $('#area').getBoundingClientRect();
+            set_viewport(0);
+            setup_drag_n_drop(set_image);
+            window.onresize = resize;
+
+            $('#area').onpointerdown = on_pointer_down;
+            $('#area').onpointermove = on_pointer_move;
+            document.onpointerup = on_pointer_up;
+
+            options.margin = $('#margin').value;
+            options.marquee_opacity = $('#marquee_opacity').value;
+            // set_image('drag.png');
+            update_viewport();
+        }
+
+        function resize() {
+            if (image.width == 0) return;
+
+            const c = $('#area').getBoundingClientRect();
+
+            const MAXW = c.width - options.margin;
+            const MAXH = c.height - options.margin;
+            const ratio = image.height / image.width;
+            canvas.visible_width = Math.floor(Math.min(image.width, MAXW));
+            canvas.visible_height = Math.floor(canvas.el.width * ratio);
+            if (canvas.el.height > MAXH) {
+                const ratio = image.width / image.height;
+                canvas.visible_height = Math.min(image.height, MAXH);
+                canvas.visible_width = canvas.visible_height * ratio;
+            }
+
+            canvas.el.style.width = canvas.visible_width + 'px';
+            canvas.el.style.height = canvas.visible_height + 'px';
+
+            const image_x = Math.floor((c.width - canvas.visible_width) / 2);
+            const image_y = Math.floor((c.height - canvas.visible_height) / 2);
+            canvas.el.style.left = image_x + 'px';
+            canvas.el.style.top = image_y + 'px';
+
+            // perc
+            image.x = image_x / c.width;
+            image.y = image_y / c.height;
+            image.x2 = (image_x + canvas.visible_width) / c.width;
+            image.y2 = (image_y + canvas.visible_height) / c.height;
+
+            process_image();
+            update_viewport();
+        }
+
+
+        function set_viewport(v) {
+            viewport = viewports[parseInt(v)];
+            update_viewport();
+        }
+
+        function update_viewport() {
+            const c = $('#area').getBoundingClientRect();
+
+            $('svg').setAttribute('opacity', viewport.visible ? "1" : "0");
+            const marquee_opacity = parseInt(options.marquee_opacity) / 100;
+            $('#r0').setAttribute('opacity', marquee_opacity);
+            $('#r1').setAttribute('opacity', marquee_opacity);
+            $('#r2').setAttribute('opacity', marquee_opacity);
+            $('#r3').setAttribute('opacity', marquee_opacity);
+
+            if (!viewport.visible) {
+                return;
+            }
+
+            // top
+            $('#r0').setAttribute('width', c.width);
+            $('#r0').setAttribute('height', viewport.y * c.height);
+
+            // bottom
+            $('#r1').setAttribute('y', viewport.y2 * c.height);
+            $('#r1').setAttribute('width', c.width);
+            $('#r1').setAttribute('height', c.height - viewport.y2 * c.height);
+
+            // left
+            $('#r2').setAttribute('y', viewport.y * c.height);
+            $('#r2').setAttribute('width', viewport.x * c.width);
+            $('#r2').setAttribute('height', (viewport.y2 - viewport.y) * c.height);
+
+            // right
+            $('#r3').setAttribute('x', viewport.x2 * c.width);
+            $('#r3').setAttribute('y', viewport.y * c.height);
+            $('#r3').setAttribute('width', c.width - viewport.x2 * c.width);
+            $('#r3').setAttribute('height', (viewport.y2 - viewport.y) * c.height);
+        }
+
+        function get_corner_coords(c) {
+            switch (c) {
+                case 0:
+                    return { x: viewport.x, y: viewport.y };
+                    break
+                case 1:
+                    return { x: viewport.x2, y: viewport.y };
+                    break
+                case 2:
+                    return { x: viewport.x, y: viewport.y2 };
+                    break
+                case 3:
+                    return { x: viewport.x2, y: viewport.y2 };
+                    break
+            }
+            return { x: 0, y: -200 };
+        }
+
+
+        function set_corner_coords(c, p) {
+            switch (c) {
+                case 0:
+                    viewport.x = p.x;
+                    viewport.y = p.y;
+                    break;
+                case 1:
+                    viewport.x2 = p.x;
+                    viewport.y = p.y;
+                    break;
+                case 2:
+                    viewport.x = p.x;
+                    viewport.y2 = p.y;
+                    break;
+                case 3:
+                    viewport.x2 = p.x;
+                    viewport.y2 = p.y;
+                    break;
+            }
+        }
+
+        function update_viewport_coords_from_mouse() {
+            const a = { x: Math.min(mouse.start.x, mouse.end.x), y: Math.min(mouse.start.y, mouse.end.y) };
+            const b = { x: Math.max(mouse.start.x, mouse.end.x), y: Math.max(mouse.start.y, mouse.end.y) };
+            viewport.x = a.x;
+            viewport.y = a.y;
+            viewport.x2 = b.x;
+            viewport.y2 = b.y;
+        }
+
+
+        function on_pointer_down(ev) {
+            if (image.el === null) return;
+            mouse.dragging = true;
+            const c = $('#area').getBoundingClientRect();
+            const p = { x: ev.offsetX / c.width, y: ev.offsetY / c.height }
+
+
+            if (mouse.on_hotarea.is_none()) {
+                mouse.start.x = p.x;
+                mouse.start.y = p.y;
+                mouse.end.x = p.x;
+                mouse.end.y = p.y;
+
+                update_viewport_coords_from_mouse();
+            }
+
+            viewport.visible = true;
+            // const p = { x: ev.offsetX / c.width, y: ev.offsetY  / c.height}
+            // if (corner !== null) {
+            //     dragging = true;
+            // }
+        }
+
+        function on_pointer_move(ev) {
+            if (image.el === null) return;
+            const c = $('#area').getBoundingClientRect();
+            const p = { x: ev.offsetX / c.width, y: ev.offsetY / c.height }
+
+            if (mouse.dragging) {
+                // TODO: clamp to canvas area
+                let dx = ev.movementX / c.width;
+                let dy = ev.movementY / c.width;
+                if (viewport.x + dx < image.x || viewport.x2 + dx > image.x2) {
+                    dx = 0;
+                }
+                if (viewport.y + dy < image.y || viewport.y2 + dy > image.y2) {
+                    dy = 0;
+                }
+
+                if (mouse.on_hotarea.is(INSIDE_VIEWPORT)) {
+                    viewport.x += dx;
+                    viewport.x2 += dx;
+                    viewport.y += dy;
+                    viewport.y2 += dy;
+                } else if (mouse.on_hotarea.is(NORTH_SIDE)) {
+                    viewport.y += dy;
+                } else if (mouse.on_hotarea.is(SOUTH_SIDE)) {
+                    viewport.y2 += dy;
+                } else if (mouse.on_hotarea.is(EAST_SIDE)) {
+                    viewport.x2 += dx;
+                } else if (mouse.on_hotarea.is(WEST_SIDE)) {
+                    viewport.x += dx;
+                } else {
+                    // drawing a new viewport
+                    mouse.end.x = p.x;
+                    mouse.end.y = p.y;
+                    update_viewport_coords_from_mouse();
+                }
+
+            }
+
+            if (viewport.visible && !mouse.dragging) {
+
+                if (p.x > viewport.x && p.x < viewport.x2 && p.y > viewport.y && p.y < viewport.y2) {
+                    // inside
+                    mouse.on_hotarea = Some(INSIDE_VIEWPORT);
+                    $('#area').style.cursor = 'move';
+                } else if (Math.abs(p.y - viewport.y) < BORDER_THRESHOLD) {
+                    // sides
+                    mouse.on_hotarea = Some(NORTH_SIDE);
+                    $('#area').style.cursor = 'ns-resize';
+                } else if (Math.abs(p.y - viewport.y2) < BORDER_THRESHOLD) {
+                    // sides
+                    mouse.on_hotarea = Some(SOUTH_SIDE);
+                    $('#area').style.cursor = 'ns-resize';
+                } else if (p.y > viewport.y && p.y < viewport.y2 && Math.abs(p.x - viewport.x) < BORDER_THRESHOLD) {
+                    // sides
+                    mouse.on_side = Some(WEST_SIDE);
+                    $('#area').style.cursor = 'ew-resize';
+                } else if (p.y > viewport.y && p.y < viewport.y2 && Math.abs(p.x - viewport.x2) < BORDER_THRESHOLD) {
+                    // sides
+                    mouse.on_side = Some(EAST_SIDE);
+                    $('#area').style.cursor = 'ew-resize';
+                }
+                else {
+                    mouse.on_hotarea = None();
+                    $('#area').style.cursor = 'default';
+                }
+
+            }
+
+            update_viewport();
+            return;
+
+
+
+
+            if (dragging) {
+                if (corner == 5) {
+                    // TODO: clamp to canvas area
+                    viewport.x += ev.movementX / c.width;
+                    viewport.x2 += ev.movementX / c.width;
+                    viewport.y += ev.movementY / c.height;
+                    viewport.y2 += ev.movementY / c.height;
+                }
+                else {
+                    set_corner_coords(corner, p);
+                }
+            } else {
+                // TODO: cache this
+                let min_dist = 9999999;
+                let closest = null;
+                for (let i = 0; i < 4; i++) {
+                    const cor = get_corner_coords(i);
+                    const dist = Math.sqrt(Math.pow(p.x - cor.x, 2) + Math.pow(p.y - cor.y, 2));
+                    if (dist < min_dist) {
+                        min_dist = dist;
+                        closest = i;
+                    }
+                }
+                // assign active corner
+                corner = null;
+                $('#area').style.cursor = 'default';
+                if (closest !== null) {
+                    if (min_dist < CORNER_THRESHOLD) {
+                        corner = closest;
+                    }
+                    else {
+                        corner = null;
+                    }
+                }
+                if (corner === null) {
+                    if (p.x > viewport.x && p.x < viewport.x2 && p.y > viewport.y && p.y < viewport.y2) {
+                        corner = 5;
+                        $('#area').style.cursor = 'move';
+                    }
+                }
+
+            }
+            update_viewport();
+        }
+
+        function on_pointer_up(ev) {
+            // const p = { x: ev.offsetX, y: ev.offsetY }
+            // dragging = false;
+            mouse.dragging = false;
+            if (Math.abs(viewport.x - viewport.x2) < 0.02 || Math.abs(viewport.y - viewport.y2) < 0.02) {
+                viewport.visible = false;
+                update_viewport();
+            }
+        }
+
+
+        function process_image() {
+            const mode = $('#mode').value;
+            canvas.ctx.drawImage(image.el, 0, 0, canvas.el.width, canvas.el.height);
+            if (mode !== 'normal') {
+                const im = canvas.ctx.getImageData(0, 0, canvas.el.width, canvas.el.height);
+                const imdata = im.data;
+                let value;
+                for (let i = 0; i < imdata.length; i += 4) {
+                    const r = imdata[i + 0];
+                    const g = imdata[i + 1];
+                    const b = imdata[i + 2];
+                    const a = imdata[i + 3];
+                    const l = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+                    if (mode == 'grayscale') {
+                        value = l;
+                    } else if (mode == '2levels') {
+                        value = l > 128 ? 255 : 0;
+                    } else if (mode == '3levels') {
+                        if (l < 255 / 3) {
+                            value = 0;
+                        } else if (l < 255 / 3 * 2) {
+                            value = 128;
+                        } else {
+                            value = 255;
+                        }
+                    } else if (mode == '4levels') {
+                        if (l < 255 / 4) {
+                            value = 0;
+                        } else if (l < 255 / 4 * 2) {
+                            value = 85;
+                        } else if (l < 255 / 4 * 3) {
+                            value = 170;
+                        } else {
+                            value = 255;
+                        }
+                    }
+                    imdata[i + 0] = value;
+                    imdata[i + 1] = value;
+                    imdata[i + 2] = value;
+                    imdata[i + 3] = a;
+                }
+                canvas.ctx.putImageData(im, 0, 0);
+            }
+        }
+        init();
+
+
+
+    </script>
+</body>
+
+</html>
