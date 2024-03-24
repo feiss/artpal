@@ -182,6 +182,11 @@
             border-radius: 3px;
         }
 
+        #thresholds {
+            border-radius: 3px;
+            border: 1px solid #333;
+        }
+
         ::-moz-range-thumb {
             height: 12px;
             width: 12px;
@@ -212,10 +217,11 @@
         <span></span>
         <div>
             Crop
-            <input type="radio" name="viewport" id="viewport" oninput="set_viewport(0)" class="active" />
-            <input type="radio" name="viewport" id="viewport" oninput="set_viewport(1)" />
-            <input type="radio" name="viewport" id="viewport" oninput="set_viewport(2)" />
-            <input type="radio" name="viewport" id="viewport" oninput="set_viewport(3)" />
+            <input type="radio" name="viewport" id="viewport" oninput="set_viewport(0)" class="active" checked="checked"
+                autocomplete="off" />
+            <input type="radio" name="viewport" autocomplete="off" id="viewport" oninput="set_viewport(1)" />
+            <input type="radio" name="viewport" autocomplete="off" id="viewport" oninput="set_viewport(2)" />
+            <input type="radio" name="viewport" autocomplete="off" id="viewport" oninput="set_viewport(3)" />
         </div>
         <select id="mode" onchange="process_image()" autocomplete="off">
             <option value="normal">Display mode...</option>
@@ -224,10 +230,9 @@
             <option value="3levels">3 Tonal values</option>
             <option value="4levels">4 Tonal values</option>
         </select>
+        <canvas width="200" height="30" id="thresholds"></canvas>
         <label> Margin <input type="range" min="0" max="300" value="100" id="margin"
                 oninput="options.margin = this.value; resize()"></label>
-        <label> Opacity <input type="range" min="50" max="100" value="97" id="marquee_opacity"
-                oninput="options.marquee_opacity = this.value; update_viewport()"></label>
         <button>Save</button>
         <span></span>
     </header>
@@ -267,6 +272,7 @@
             start: { x: 0, y: 0 },
             end: { x: 0, y: 0 },
             on_hotarea: None(),
+            on_thresholds: None(),
         }
 
         let dragging = false;
@@ -277,13 +283,22 @@
             ctx: $('#image').getContext('2d'),
             visible_width: 0,
             visible_height: 0,
+            histogram: [],
+            histogram_max: 0,
         }
         let options = {
             margin: 100,
-            marquee_opacity: 90,
+            marquee_opacity: 94,
             mode: "normal"
         };
 
+        const thresholds = {
+            "normal": None(),
+            "grayscale": None(),
+            "2levels": Some([128]),
+            "3levels": Some([85, 170]),
+            "4levels": Some([64, 128, 192]),
+        };
 
         const NORTH_SIDE = 1;
         const SOUTH_SIDE = 2;
@@ -316,6 +331,8 @@
             canvas.el.width = image.width;
             canvas.el.height = image.height;
             canvas.ctx = canvas.el.getContext('2d');
+            calculate_histogram();
+            draw_thresholds_control();
             resize();
         }
 
@@ -329,8 +346,10 @@
             $('#area').onpointermove = on_pointer_move;
             document.onpointerup = on_pointer_up;
 
+            $('#thresholds').onpointerdown = on_thresholds_down;
+            $('#thresholds').onpointermove = on_thresholds_move;
+
             options.margin = $('#margin').value;
-            options.marquee_opacity = $('#marquee_opacity').value;
             // set_image('drag.png');
             update_viewport();
         }
@@ -485,6 +504,7 @@
 
         function on_pointer_move(ev) {
             if (image.el === null) return;
+
             const c = $('#area').getBoundingClientRect();
             const p = { x: ev.offsetX / c.width, y: ev.offsetY / c.height }
 
@@ -606,6 +626,7 @@
             // const p = { x: ev.offsetX, y: ev.offsetY }
             // dragging = false;
             mouse.dragging = false;
+            mouse.on_thresholds = None();
             if (Math.abs(viewport.x - viewport.x2) < 0.02 || Math.abs(viewport.y - viewport.y2) < 0.02) {
                 viewport.visible = false;
                 update_viewport();
@@ -614,9 +635,13 @@
 
 
         function process_image() {
+            draw_thresholds_control();
+
             const mode = $('#mode').value;
             canvas.ctx.drawImage(image.el, 0, 0, canvas.el.width, canvas.el.height);
             if (mode !== 'normal') {
+
+                const knobs = thresholds[mode].unwrap();
                 const im = canvas.ctx.getImageData(0, 0, canvas.el.width, canvas.el.height);
                 const imdata = im.data;
                 let value;
@@ -628,25 +653,14 @@
                     const l = 0.2126 * r + 0.7152 * g + 0.0722 * b;
                     if (mode == 'grayscale') {
                         value = l;
-                    } else if (mode == '2levels') {
-                        value = l > 128 ? 255 : 0;
-                    } else if (mode == '3levels') {
-                        if (l < 255 / 3) {
-                            value = 0;
-                        } else if (l < 255 / 3 * 2) {
-                            value = 128;
-                        } else {
-                            value = 255;
-                        }
-                    } else if (mode == '4levels') {
-                        if (l < 255 / 4) {
-                            value = 0;
-                        } else if (l < 255 / 4 * 2) {
-                            value = 85;
-                        } else if (l < 255 / 4 * 3) {
-                            value = 170;
-                        } else {
-                            value = 255;
+                    } else {
+                        const value_step = Math.floor(255 / knobs.length);
+                        value = 255;
+                        for (let k = 0, v = 0; k < knobs.length; k++, v += value_step) {
+                            if (l < knobs[k]) {
+                                value = v;
+                                break;
+                            }
                         }
                     }
                     imdata[i + 0] = value;
@@ -660,7 +674,87 @@
         init();
 
 
+        function on_thresholds_down(ev) {
+            // get which threshold was selected
+            const thresholds_canvas = $('#thresholds');
+            let w = thresholds_canvas.width;
 
+            let knob = None();
+            const mode = $('#mode').value;
+            if (thresholds[mode].is_some()) {
+                const knobs = thresholds[mode].unwrap();
+                for (let i = 0; i < knobs.length; i++) {
+                    const knob_x = Math.floor(knobs[i] / 255 * w);
+                    if (Math.abs(knob_x - ev.offsetX) < 5) {
+                        knob = Some(i);
+                        break;
+                    }
+                }
+            }
+            mouse.on_thresholds = knob.clone();
+        }
+
+        function on_thresholds_move(ev) {
+            if (mouse.on_thresholds.is_some()) {
+                const thresholds_canvas = $('#thresholds');
+                let w = thresholds_canvas.width;
+
+                const mode = $('#mode').value;
+                const knob = mouse.on_thresholds.unwrap();
+                thresholds[mode].v[knob] = Math.max(0, Math.min(253, ev.offsetX / w * 255));
+                thresholds[mode].v.sort((a, b) => a - b);
+                draw_thresholds_control();
+                process_image();
+            }
+        }
+
+        function draw_thresholds_control() {
+            const mode = $('#mode').value;
+            const use_thresholds = thresholds[mode].is_some();
+
+            const thresholds_canvas = $('#thresholds');
+            thresholds_canvas.style.display = use_thresholds ? 'block' : 'none';
+            if (!use_thresholds) return;
+
+            let ctx = thresholds_canvas.getContext('2d');
+            let w = thresholds_canvas.width;
+            let h = thresholds_canvas.height;
+            thresholds_canvas.width = w; //clear
+
+            ctx.fillStyle = '#333';
+            for (let i = 0; i < canvas.histogram.length; i++) {
+                const v = canvas.histogram[i] / canvas.histogram_max * h;
+                ctx.fillRect(Math.floor(i / 255 * w), h - v, 1, v);
+            }
+
+            ctx.fillStyle = '#edcb7a';
+            if (use_thresholds) {
+                const knobs = thresholds[mode].unwrap();
+                for (let i = 0; i < knobs.length; i++) {
+                    ctx.fillRect(Math.floor(knobs[i] / 255 * w), 0, 2, h);
+                }
+            }
+        }
+
+
+        function calculate_histogram() {
+            canvas.histogram = new Array(256).fill(0);
+            canvas.histogram_max = 0;
+            canvas.ctx.drawImage(image.el, 0, 0, canvas.el.width, canvas.el.height);
+            const im = canvas.ctx.getImageData(0, 0, canvas.el.width, canvas.el.height);
+            const imdata = im.data;
+            let value;
+            let max = 0;
+            for (let i = 0; i < imdata.length; i += 4) {
+                const r = imdata[i + 0];
+                const g = imdata[i + 1];
+                const b = imdata[i + 2];
+                const a = imdata[i + 3];
+                const l = Math.floor(0.2126 * r + 0.7152 * g + 0.0722 * b);
+                canvas.histogram[l]++;
+                canvas.histogram_max = Math.max(canvas.histogram_max, canvas.histogram[l]);
+            }
+        }
     </script>
 </body>
 

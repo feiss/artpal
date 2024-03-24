@@ -29,15 +29,15 @@ function setup_drag_n_drop(handle) {
 class Option {
     constructor(v, is_some) {
         this.v = v;
-        this.is_some = is_some;
+        this._is_some = is_some;
     }
 
     is_none() {
-        return !this.is_some;
+        return !this._is_some;
     }
 
     is_some() {
-        return this.is_some;
+        return this._is_some;
     }
 
     unwrap() {
@@ -45,7 +45,11 @@ class Option {
     }
 
     is(v) {
-        return this.is_some && this.v === v;
+        return this._is_some && this.v === v;
+    }
+
+    clone() {
+        return new Option(this.v, this._is_some);
     }
 }
 
